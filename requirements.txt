@@ -1,0 +1,1 @@
+-e git+https://github.com/gitpython-developers/GitPython.git@cd72d78e79271f0f9025984fb2d9a6c5b4dba4de#egg=GitPython-dev
