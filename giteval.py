@@ -11,6 +11,9 @@ IGNORE_FILENAMES = (
     'LICENSE',
     'static/piplmesh/jquery/',
 )
+IGNORE_AUTHORS = (
+    'mitar.git@tnode.com',
+)
 
 os.environ['PATH'] += ':%s' % GIT_PATH
 
@@ -79,6 +82,9 @@ def ignore_file(file):
 
 def print_stats(stats, level):
     for author, count in sorted(stats.iteritems(), key=operator.itemgetter(1), reverse=True):
+        if author in IGNORE_AUTHORS:
+            continue
+
         print "%s%s %s" % (' ' * level, author, count)
 
 pull_requests = github_api('https://api.github.com/repos/%s/pulls' % GITHUB_REPOSITORY, {'state': 'closed'})
