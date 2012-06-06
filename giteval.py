@@ -2,8 +2,12 @@ import json, operator, os, re, urllib
 
 import git
 
-GITHUB_REPOSITORY = 'wlanslovenija/PiplMesh'
-LOCAL_REPOSITORY = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'PiplMesh'))
+### Configuration start ###
+REPOSITORIES = (
+    ('wlanslovenija/PiplMesh', '../PiplMesh'),
+    ('mitar/django-pushserver', '../django-pushserver'),
+    ('mitar/django-tastypie-mongoengine', '../django-tastypie-mongoengine'),
+)
 GIT_PATH = '/opt/local/bin'
 IGNORE_FILENAMES = (
     'jQuery_library_1_7_1.js',
@@ -13,8 +17,13 @@ IGNORE_FILENAMES = (
 )
 IGNORE_AUTHORS = (
     'mitar.git@tnode.com',
+    'leo@naeka.fr',
+    'aparajita@aparajita.com',
+    'aparajita@slevenbits.com',
+    'jeff@renci.org',
 )
 MAX_SCORE = 700
+### Configuration end ###
 
 os.environ['PATH'] += ':%s' % GIT_PATH
 
@@ -112,61 +121,66 @@ def print_chart(stats):
 
     print "https://chart.googleapis.com/chart?%s" % urllib.urlencode(args)
 
-pull_requests = github_api('https://api.github.com/repos/%s/pulls' % GITHUB_REPOSITORY, {'state': 'closed'})
-pull_requests = filter(lambda p: p['merged_at'], pull_requests)
-
-repo = git.Repo(LOCAL_REPOSITORY)
-repo.remotes.origin.fetch()
-
 global_stats = {}
 
-for pull in pull_requests:
-    print pull['html_url']
+for github_repository, local_repository in REPOSITORIES:
+    print github_repository
 
-    number = pull['number']
-    pull = json.load(urllib.urlopen('https://api.github.com/repos/%s/pulls/%d' % (GITHUB_REPOSITORY, number)))
+    local_repository = os.path.abspath(os.path.join(os.path.dirname(__file__), local_repository))
 
-    local_stats = {}
+    pull_requests = github_api('https://api.github.com/repos/%s/pulls' % github_repository, {'state': 'closed'})
+    pull_requests = filter(lambda p: p['merged_at'], pull_requests)
 
-    files = github_api('https://api.github.com/repos/%s/pulls/%d/files' % (GITHUB_REPOSITORY, number))
+    repo = git.Repo(local_repository)
+    repo.remotes.origin.fetch()
 
-    additions = 0
+    for pull in pull_requests:
+        print "  %s" % pull['html_url']
 
-    for file in files:
-        assert file['sha'] == pull['head']['sha']
+        number = pull['number']
+        pull = json.load(urllib.urlopen('https://api.github.com/repos/%s/pulls/%d' % (github_repository, number)))
 
-        if ignore_file(file):
-            additions += file['additions']
-            continue
+        local_stats = {}
 
-        if file['status'] == 'removed':
-            continue
+        files = github_api('https://api.github.com/repos/%s/pulls/%d/files' % (github_repository, number))
 
-        if 'patch' not in file:
-            continue
+        additions = 0
 
-        filename = file['filename']
-        print "    %s" % filename
+        for file in files:
+            assert file['sha'] == pull['head']['sha']
 
-        patch = file['patch']
+            if ignore_file(file):
+                additions += file['additions']
+                continue
 
-        added_lines = parse_patch(patch)
+            if file['status'] == 'removed':
+                continue
 
-        assert len(added_lines) == file['additions']
+            if 'patch' not in file:
+                continue
 
-        blamed_lines = blame_lines(repo, filename)
+            filename = file['filename']
+            print "      %s" % filename
 
-        for line in added_lines:
-            author = blamed_lines[line - 1].author.email
-            local_stats[author] = local_stats.get(author, 0) + 1
+            patch = file['patch']
 
-    print_stats(local_stats, 2)
+            added_lines = parse_patch(patch)
 
-    for author, count in local_stats.items():
-        global_stats[author] = global_stats.get(author, 0) + count
-        additions += count
+            assert len(added_lines) == file['additions']
 
-    assert additions == pull['additions']
+            blamed_lines = blame_lines(repo, filename)
+
+            for line in added_lines:
+                author = blamed_lines[line - 1].author.email
+                local_stats[author] = local_stats.get(author, 0) + 1
+
+        print_stats(local_stats, 4)
+
+        for author, count in local_stats.items():
+            global_stats[author] = global_stats.get(author, 0) + count
+            additions += count
+
+        assert additions == pull['additions']
 
 print_stats(global_stats, 0)
 print_chart(global_stats)
