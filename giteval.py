@@ -14,6 +14,7 @@ IGNORE_FILENAMES = (
 IGNORE_AUTHORS = (
     'mitar.git@tnode.com',
 )
+MAX_SCORE = 700
 
 os.environ['PATH'] += ':%s' % GIT_PATH
 
@@ -87,6 +88,30 @@ def print_stats(stats, level):
 
         print "%s%s %s" % (' ' * level, author, count)
 
+def print_chart(stats):
+    labels = []
+    values = []
+
+    for author, count in sorted(stats.iteritems(), key=operator.itemgetter(1), reverse=True):
+        if author in IGNORE_AUTHORS:
+            continue
+
+        labels.append(author)
+        values.append(count)
+
+    args = {
+        'cht': 'bhs',
+        'chd': 't:%s' % ','.join([str(float(v) / float(MAX_SCORE) * 100.0) for v in values]),
+        'chxl': '|'.join(reversed(labels + ['1:'])),
+        'chs': '600x500',
+        'chbh': 'a',
+        'chds': '0,100',
+        'chxt': 'x,y',
+        'chm': 'N,000000,0,,10',
+    }
+
+    print "https://chart.googleapis.com/chart?%s" % urllib.urlencode(args)
+
 pull_requests = github_api('https://api.github.com/repos/%s/pulls' % GITHUB_REPOSITORY, {'state': 'closed'})
 pull_requests = filter(lambda p: p['merged_at'], pull_requests)
 
@@ -144,3 +169,4 @@ for pull in pull_requests:
     assert additions == pull['additions']
 
 print_stats(global_stats, 0)
+print_chart(global_stats)
