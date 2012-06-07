@@ -1,31 +1,29 @@
-import json, operator, os, re, urllib
+import json, operator, os, random, re, urllib
 
 import git
 
-### Configuration start ###
-REPOSITORIES = (
-    ('wlanslovenija/PiplMesh', '../PiplMesh'),
-    ('mitar/django-pushserver', '../django-pushserver'),
-    ('mitar/django-tastypie-mongoengine', '../django-tastypie-mongoengine'),
-)
-GIT_PATH = '/opt/local/bin'
-IGNORE_FILENAMES = (
-    'jQuery_library_1_7_1.js',
-    'COPYING',
-    'LICENSE',
-    'static/piplmesh/jquery/',
-)
-IGNORE_AUTHORS = (
-    'mitar.git@tnode.com',
-    'leo@naeka.fr',
-    'aparajita@aparajita.com',
-    'aparajita@slevenbits.com',
-    'jeff@renci.org',
-)
+GIT_PATH = None
+REPOSITORIES = ()
+IGNORE_FILENAMES = ()
+IGNORE_AUTHORS = ()
 MAX_SCORE = 700
-### Configuration end ###
+SCORE_CORRECTIONS = {}
+WINNING_TEAM_SCORE = 70
+WINNING_TEAM = ()
 
-os.environ['PATH'] += ':%s' % GIT_PATH
+import local_settings
+
+GIT_PATH = getattr(local_settings, 'GIT_PATH', GIT_PATH)
+REPOSITORIES += getattr(local_settings, 'REPOSITORIES', ())
+IGNORE_FILENAMES += getattr(local_settings, 'IGNORE_FILENAMES', ())
+IGNORE_AUTHORS += getattr(local_settings, 'IGNORE_AUTHORS', ())
+MAX_SCORE = getattr(local_settings, 'MAX_SCORE', MAX_SCORE)
+SCORE_CORRECTIONS.update(getattr(local_settings, 'SCORE_CORRECTIONS', {}))
+WINNING_TEAM_SCORE = getattr(local_settings, 'WINNING_TEAM_SCORE', WINNING_TEAM_SCORE)
+WINNING_TEAM += getattr(local_settings, 'WINNING_TEAM', ())
+
+if GIT_PATH is not None:
+    os.environ['PATH'] += ':%s' % GIT_PATH
 
 PAGE_SIZE = 100
 PATCH_HEADER = re.compile(r'^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@')
@@ -98,15 +96,36 @@ def print_stats(stats, level):
         print "%s%s %s" % (' ' * level, author, count)
 
 def print_chart(stats):
+    stats = stats.copy()
+    for author in WINNING_TEAM:
+        stats[author] = stats.get(author, 0) + WINNING_TEAM_SCORE
+    corrected_scores = [(author, count + SCORE_CORRECTIONS.get(author, 0)) for author, count in stats.items()]
+
     labels = []
     values = []
 
-    for author, count in sorted(stats.iteritems(), key=operator.itemgetter(1), reverse=True):
+    for author, count in sorted(corrected_scores, key=operator.itemgetter(1), reverse=True):
         if author in IGNORE_AUTHORS:
             continue
 
+        random.seed(author)
+        author = author.replace('@', '.')
+        c = 0
+        while c < 4:
+            i = random.randrange(len(author))
+            if author[i] != '.':
+                author = list(author)
+                author[i] = '.'
+                author = ''.join(author)
+                c += 1
         labels.append(author)
         values.append(count)
+
+    repositories = []
+    for github_repository, local_repository in REPOSITORIES:
+        local_repository = os.path.abspath(os.path.join(os.path.dirname(__file__), local_repository))
+        repo = git.Repo(local_repository)
+        repositories.append('%s@%.10s' % (github_repository, repo.heads.master.commit.hexsha))
 
     args = {
         'cht': 'bhs',
@@ -117,6 +136,7 @@ def print_chart(stats):
         'chds': '0,100',
         'chxt': 'x,y',
         'chm': 'N,000000,0,,10',
+        'chem': 'y;s=text_outline;po=%f,0.99;d=000000,10,r,ffffff,_,%s' % (1.0 - (0.03 * len(repositories)), ','.join(repositories)),
     }
 
     print "https://chart.googleapis.com/chart?%s" % urllib.urlencode(args)
