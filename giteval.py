@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import json, operator, os, random, re, urllib
 
 import git
@@ -6,6 +8,7 @@ GIT_PATH = None
 REPOSITORIES = ()
 IGNORE_FILENAMES = ()
 IGNORE_AUTHORS = ()
+MERGE_AUTHORS = {}
 MAX_SCORE = 700
 SCORE_CORRECTIONS = {}
 WINNING_TEAM_SCORE = 70
@@ -17,6 +20,7 @@ GIT_PATH = getattr(local_settings, 'GIT_PATH', GIT_PATH)
 REPOSITORIES += getattr(local_settings, 'REPOSITORIES', ())
 IGNORE_FILENAMES += getattr(local_settings, 'IGNORE_FILENAMES', ())
 IGNORE_AUTHORS += getattr(local_settings, 'IGNORE_AUTHORS', ())
+MERGE_AUTHORS.update(getattr(local_settings, 'MERGE_AUTHORS', {}))
 MAX_SCORE = getattr(local_settings, 'MAX_SCORE', MAX_SCORE)
 SCORE_CORRECTIONS.update(getattr(local_settings, 'SCORE_CORRECTIONS', {}))
 WINNING_TEAM_SCORE = getattr(local_settings, 'WINNING_TEAM_SCORE', WINNING_TEAM_SCORE)
@@ -192,6 +196,7 @@ for github_repository, local_repository in REPOSITORIES:
 
             for line in added_lines:
                 author = blamed_lines[line - 1].author.email
+                author = MERGE_AUTHORS.get(author, author)
                 local_stats[author] = local_stats.get(author, 0) + 1
 
         print_stats(local_stats, 4)
