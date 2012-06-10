@@ -6,7 +6,8 @@ import git
 
 GIT_PATH = None
 REPOSITORIES = ()
-IGNORE_FILENAMES = ()
+ADD_IGNORE_FILENAMES = ()
+ALL_IGNORE_FILENAMES = ()
 IGNORE_AUTHORS = ()
 MERGE_AUTHORS = {}
 MAX_SCORE = 700
@@ -18,7 +19,8 @@ import local_settings
 
 GIT_PATH = getattr(local_settings, 'GIT_PATH', GIT_PATH)
 REPOSITORIES += getattr(local_settings, 'REPOSITORIES', ())
-IGNORE_FILENAMES += getattr(local_settings, 'IGNORE_FILENAMES', ())
+ADD_IGNORE_FILENAMES += getattr(local_settings, 'ADD_IGNORE_FILENAMES', ())
+ALL_IGNORE_FILENAMES += getattr(local_settings, 'ALL_IGNORE_FILENAMES', ())
 IGNORE_AUTHORS += getattr(local_settings, 'IGNORE_AUTHORS', ())
 MERGE_AUTHORS.update(getattr(local_settings, 'MERGE_AUTHORS', {}))
 MAX_SCORE = getattr(local_settings, 'MAX_SCORE', MAX_SCORE)
@@ -83,10 +85,14 @@ def blame_lines(repo, filename):
     return blamed_lines
 
 def ignore_file(file):
+    for ignore in ALL_IGNORE_FILENAMES:
+        if ignore in file['filename']:
+            return True
+
     if file['status'] != 'added':
         return False
 
-    for ignore in IGNORE_FILENAMES:
+    for ignore in ADD_IGNORE_FILENAMES:
         if ignore in file['filename']:
             return True
 
