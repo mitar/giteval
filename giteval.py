@@ -103,13 +103,27 @@ def print_stats(stats, level):
         if author in IGNORE_AUTHORS:
             continue
 
-        print "%s%s %s" % (' ' * level, author, count)
+        if isinstance(count, float):
+            print "%s%s %.2f" % (' ' * level, author, count)
+        else:
+            print "%s%s %s" % (' ' * level, author, count)
 
-def print_chart(stats):
+def correct_scores(stats):
     stats = stats.copy()
     for author in WINNING_TEAM:
         stats[author] = stats.get(author, 0) + WINNING_TEAM_SCORE
-    corrected_scores = [(author, count + SCORE_CORRECTIONS.get(author, 0)) for author, count in stats.items()]
+    stats = {author: count + SCORE_CORRECTIONS.get(author, 0) for author, count in stats.items()}
+    return stats
+
+def print_percents(stats):
+    stats = correct_scores(stats)
+
+    stats = {author: float(count) / float(MAX_SCORE) * 100.0 for author, count in stats.items()}
+
+    print_stats(stats, 0)
+
+def print_chart(stats):
+    corrected_scores = correct_scores(stats).items()
 
     labels = []
     values = []
@@ -213,5 +227,9 @@ for github_repository, local_repository in REPOSITORIES:
 
         assert additions == pull['additions']
 
+print '======'
 print_stats(global_stats, 0)
+print '======'
+print_percents(global_stats)
+print '======'
 print_chart(global_stats)
