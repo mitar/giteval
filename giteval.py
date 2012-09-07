@@ -187,6 +187,7 @@ for github_repository, local_repository in REPOSITORIES:
         local_stats = {}
 
         files = github_api('https://api.github.com/repos/%s/pulls/%d/files' % (github_repository, number))
+        commits = github_api('https://api.github.com/repos/%s/pulls/%d/commits' % (github_repository, number))
 
         additions = 0
 
@@ -218,6 +219,12 @@ for github_repository, local_repository in REPOSITORIES:
                 author = blamed_lines[line - 1].author.email
                 author = MERGE_AUTHORS.get(author, author)
                 local_stats[author] = local_stats.get(author, 0) + 1
+
+        all_blamed_authors = set(local_stats.keys())
+        all_commits_authors = {commit['commit']['author']['email'] for commit in commits}
+        all_commits_authors = {MERGE_AUTHORS.get(author, author) for author in all_commits_authors}
+
+        assert all_blamed_authors <= all_commits_authors, (all_blamed_authors, all_commits_authors)
 
         print_stats(local_stats, 4)
 
