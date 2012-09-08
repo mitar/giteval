@@ -73,8 +73,8 @@ def parse_patch(patch):
 
     return add_lines
 
-def blame_lines(repo, filename):
-    blame = repo.blame(file['sha'], filename)
+def blame_lines(repo, commit, filename):
+    blame = repo.blame(commit, filename)
 
     blamed_lines = []
 
@@ -192,8 +192,6 @@ for github_repository, local_repository in REPOSITORIES:
         additions = 0
 
         for file in files:
-            assert file['sha'] == pull['head']['sha']
-
             if ignore_file(file):
                 additions += file['additions']
                 continue
@@ -213,7 +211,7 @@ for github_repository, local_repository in REPOSITORIES:
 
             assert len(added_lines) == file['additions']
 
-            blamed_lines = blame_lines(repo, filename)
+            blamed_lines = blame_lines(repo, pull['head']['sha'], filename)
 
             for line in added_lines:
                 author = blamed_lines[line - 1].author.email
