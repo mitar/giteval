@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
-import json, operator, os, random, re, urllib
+import json, operator, os, random, urllib
 
 import git
+# Has to be imported like this because util module is not accessible from git module directly
+from git.util import hex_to_bin, Actor
 
 GIT_PATH = None
 REPOSITORIES = ()
@@ -32,7 +34,6 @@ if GIT_PATH is not None:
     os.environ['PATH'] += ':%s' % GIT_PATH
 
 PAGE_SIZE = 100
-PATCH_HEADER = re.compile(r'^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@')
 
 def github_api(url, args={}):
     data = []
@@ -53,36 +54,91 @@ def github_api(url, args={}):
 
     return data
 
-def parse_patch(patch):
-    add_lines = []
+def blame(repo, start_commit, end_commit, filename):
+    data = repo.git.blame('%s^..%s' % (start_commit, end_commit), '--', filename, p=True)
+    commits = dict()
+    blames = list()
+    info = None
 
-    line_number = None
-    for line in patch.splitlines():
-        if line.startswith('@'):
-            line_number = int(PATCH_HEADER.match(line).group(3))
-        elif line.startswith('-'):
-            pass
-        elif line.startswith('\\'):
-            pass
-        elif line.startswith('+'):
-            add_lines.append(line_number)
-            line_number += 1
+    for line in data.splitlines(False):
+        parts = repo.re_whitespace.split(line, 1)
+        firstpart = parts[0]
+        if repo.re_hexsha_only.search(firstpart):
+            # handles
+            # 634396b2f541a9f2d58b00be1a07f0c358b999b3 1 1 7		- indicates blame-data start
+            # 634396b2f541a9f2d58b00be1a07f0c358b999b3 2 2
+            digits = parts[-1].split(" ")
+            if len(digits) == 3:
+                info = {'id': firstpart}
+                blames.append([None, []])
+            elif info['id'] != firstpart:
+                info = {'id': firstpart}
+                blames.append([commits.get(firstpart), []])
+            # END blame data initialization
         else:
-            assert line.startswith(' ')
-            line_number += 1
+            m = repo.re_author_committer_start.search(firstpart)
+            if m:
+                # handles:
+                # author Tom Preston-Werner
+                # author-mail <tom@mojombo.com>
+                # author-time 1192271832
+                # author-tz -0700
+                # committer Tom Preston-Werner
+                # committer-mail <tom@mojombo.com>
+                # committer-time 1192271832
+                # committer-tz -0700  - IGNORED BY US
+                role = m.group(0)
+                if firstpart.endswith('-mail'):
+                    info["%s_email" % role] = parts[-1]
+                elif firstpart.endswith('-time'):
+                    info["%s_date" % role] = int(parts[-1])
+                elif role == firstpart:
+                    info[role] = parts[-1]
+                # END distinguish mail,time,name
+            else:
+                # handle
+                # filename lib/grit.rb
+                # summary add Blob
+                # <and rest>
+                if firstpart.startswith('filename'):
+                    info['filename'] = parts[-1]
+                elif firstpart.startswith('summary'):
+                    info['summary'] = parts[-1]
+                elif firstpart.startswith('boundary'):
+                    info['boundary'] = True
+                elif firstpart == '':
+                    if info:
+                        sha = info['id']
+                        c = commits.get(sha)
+                        if c is None:
+                            if info.get('boundary'):
+                                commits[sha] = False
+                            else:
+                                c = repo.CommitCls(
+                                    repo,
+                                    hex_to_bin(sha),
+                                    author=Actor._from_string(info['author'] + ' ' + info['author_email']),
+                                    authored_date=info['author_date'],
+                                    committer=Actor._from_string(info['committer'] + ' ' + info['committer_email']),
+                                    committed_date=info['committer_date'],
+                                    message=info['summary']
+                                )
+                                commits[sha] = c
+                        if c is not False:
+                            # END if commit objects needs initial creation
+                            m = repo.re_tab_full_line.search(line)
+                            text,  = m.groups()
+                            blames[-1][0] = c
+                            blames[-1][1].append(text)
+                        info = { 'id' : sha }
+                    # END if we collected commit info
+                # END distinguish filename,summary,rest
+            # END distinguish author|committer vs filename,summary,rest
+        # END distinguish hexsha vs other information
 
-    return add_lines
-
-def blame_lines(repo, commit, filename):
-    blame = repo.blame(commit, filename)
-
-    blamed_lines = []
-
-    for change, lines in blame:
-        for line in lines:
-            blamed_lines.append(change)
-
-    return blamed_lines
+    for commit, lines in blames:
+        if commit is not None:
+            yield commit, lines
 
 def ignore_file(file):
     for ignore in ALL_IGNORE_FILENAMES:
@@ -189,11 +245,12 @@ for github_repository, local_repository in REPOSITORIES:
         files = github_api('https://api.github.com/repos/%s/pulls/%d/files' % (github_repository, number))
         commits = github_api('https://api.github.com/repos/%s/pulls/%d/commits' % (github_repository, number))
 
-        additions = 0
+        first_commit = commits[0]['sha']
+        last_commit = commits[-1]['sha']
+        all_commits = {commit['sha'] for commit in commits}
 
         for file in files:
             if ignore_file(file):
-                additions += file['additions']
                 continue
 
             if file['status'] == 'removed':
@@ -205,18 +262,15 @@ for github_repository, local_repository in REPOSITORIES:
             filename = file['filename']
             print "      %s" % filename
 
-            patch = file['patch']
+            blames = blame(repo, first_commit, last_commit, filename)
 
-            added_lines = parse_patch(patch)
+            for commit, lines in blames:
+                if commit.hexsha not in all_commits:
+                    continue
 
-            assert len(added_lines) == file['additions']
-
-            blamed_lines = blame_lines(repo, pull['head']['sha'], filename)
-
-            for line in added_lines:
-                author = blamed_lines[line - 1].author.email
+                author = commit.author.email
                 author = MERGE_AUTHORS.get(author, author)
-                local_stats[author] = local_stats.get(author, 0) + 1
+                local_stats[author] = local_stats.get(author, 0) + len(lines)
 
         all_blamed_authors = set(local_stats.keys())
         all_commits_authors = {commit['commit']['author']['email'] for commit in commits}
@@ -228,9 +282,6 @@ for github_repository, local_repository in REPOSITORIES:
 
         for author, count in local_stats.items():
             global_stats[author] = global_stats.get(author, 0) + count
-            additions += count
-
-        assert additions == pull['additions']
 
 print '======'
 print_stats(global_stats, 0)
