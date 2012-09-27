@@ -10,6 +10,7 @@ GIT_PATH = None
 REPOSITORIES = ()
 ADD_IGNORE_FILENAMES = ()
 ALL_IGNORE_FILENAMES = ()
+IGNORE_PULL_REQUESTS = ()
 IGNORE_AUTHORS = ()
 MERGE_AUTHORS = {}
 MAX_SCORE = 700
@@ -23,6 +24,7 @@ GIT_PATH = getattr(local_settings, 'GIT_PATH', GIT_PATH)
 REPOSITORIES += getattr(local_settings, 'REPOSITORIES', ())
 ADD_IGNORE_FILENAMES += getattr(local_settings, 'ADD_IGNORE_FILENAMES', ())
 ALL_IGNORE_FILENAMES += getattr(local_settings, 'ALL_IGNORE_FILENAMES', ())
+IGNORE_PULL_REQUESTS += getattr(local_settings, 'IGNORE_PULL_REQUESTS', ())
 IGNORE_AUTHORS += getattr(local_settings, 'IGNORE_AUTHORS', ())
 MERGE_AUTHORS.update(getattr(local_settings, 'MERGE_AUTHORS', {}))
 MAX_SCORE = getattr(local_settings, 'MAX_SCORE', MAX_SCORE)
@@ -235,9 +237,13 @@ for github_repository, local_repository in REPOSITORIES:
     repo.remotes.origin.fetch()
 
     for pull in pull_requests:
+        number = pull['number']
+
+        if '%s/pull/%d' % (github_repository, number) in IGNORE_PULL_REQUESTS:
+            continue
+
         print "  %s" % pull['html_url']
 
-        number = pull['number']
         pull = json.load(urllib.urlopen('https://api.github.com/repos/%s/pulls/%d' % (github_repository, number)))
 
         local_stats = {}
