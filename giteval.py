@@ -14,7 +14,7 @@ IGNORE_PULL_REQUESTS = ()
 IGNORE_AUTHORS = ()
 MERGE_AUTHORS = {}
 MAX_SCORE = 700
-SCORE_CORRECTIONS = {}
+SCORE_CORRECTIONS = ()
 WINNING_TEAM_SCORE = 70
 WINNING_TEAM = ()
 
@@ -28,7 +28,7 @@ IGNORE_PULL_REQUESTS += getattr(local_settings, 'IGNORE_PULL_REQUESTS', ())
 IGNORE_AUTHORS += getattr(local_settings, 'IGNORE_AUTHORS', ())
 MERGE_AUTHORS.update(getattr(local_settings, 'MERGE_AUTHORS', {}))
 MAX_SCORE = getattr(local_settings, 'MAX_SCORE', MAX_SCORE)
-SCORE_CORRECTIONS.update(getattr(local_settings, 'SCORE_CORRECTIONS', {}))
+SCORE_CORRECTIONS += getattr(local_settings, 'SCORE_CORRECTIONS', ())
 WINNING_TEAM_SCORE = getattr(local_settings, 'WINNING_TEAM_SCORE', WINNING_TEAM_SCORE)
 WINNING_TEAM += getattr(local_settings, 'WINNING_TEAM', ())
 
@@ -36,6 +36,10 @@ if GIT_PATH is not None:
     os.environ['PATH'] += ':%s' % GIT_PATH
 
 PAGE_SIZE = 100
+
+SCORE_CORRECTIONS_DICT = {}
+for author, score in SCORE_CORRECTIONS:
+    SCORE_CORRECTIONS_DICT[author] = SCORE_CORRECTIONS_DICT.get(author, 0) + score
 
 def github_api(url, args={}):
     data = []
@@ -170,7 +174,9 @@ def correct_scores(stats):
     stats = stats.copy()
     for author in WINNING_TEAM:
         stats[author] = stats.get(author, 0) + WINNING_TEAM_SCORE
-    stats = {author: count + SCORE_CORRECTIONS.get(author, 0) for author, count in stats.items()}
+    for author in SCORE_CORRECTIONS_DICT.keys():
+        stats[author] = stats.get(author, 0)
+    stats = {author: count + SCORE_CORRECTIONS_DICT.get(author, 0) for author, count in stats.items()}
     return stats
 
 def print_percents(stats):
