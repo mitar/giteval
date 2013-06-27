@@ -6,6 +6,7 @@ import git
 # Has to be imported like this because util module is not accessible from git module directly
 from git.util import hex_to_bin, Actor
 
+GITHUB_ACCESS_TOKEN = None
 GIT_PATH = None
 REPOSITORIES = ()
 ADD_IGNORE_FILENAMES = ()
@@ -20,6 +21,7 @@ WINNING_TEAM = ()
 
 import local_settings
 
+GITHUB_ACCESS_TOKEN = getattr(local_settings, 'GITHUB_ACCESS_TOKEN', None)
 GIT_PATH = getattr(local_settings, 'GIT_PATH', GIT_PATH)
 REPOSITORIES += getattr(local_settings, 'REPOSITORIES', ())
 ADD_IGNORE_FILENAMES += getattr(local_settings, 'ADD_IGNORE_FILENAMES', ())
@@ -31,6 +33,9 @@ MAX_SCORE = getattr(local_settings, 'MAX_SCORE', MAX_SCORE)
 SCORE_CORRECTIONS += getattr(local_settings, 'SCORE_CORRECTIONS', ())
 WINNING_TEAM_SCORE = getattr(local_settings, 'WINNING_TEAM_SCORE', WINNING_TEAM_SCORE)
 WINNING_TEAM += getattr(local_settings, 'WINNING_TEAM', ())
+
+if not GITHUB_ACCESS_TOKEN:
+    raise Exception("GitHub access token is not configured.")
 
 if GIT_PATH is not None:
     os.environ['PATH'] += ':%s' % GIT_PATH
@@ -49,8 +54,13 @@ def github_api(url, args={}):
         args.update({
             'per_page': PAGE_SIZE,
             'page': page,
+            'access_token': GITHUB_ACCESS_TOKEN,
         })
         d = json.load(urllib.urlopen("%s?%s" % (url, urllib.urlencode(args))))
+
+        if not isinstance(d, list):
+            raise Exception(d)
+
         data.extend(d)
 
         if len(d) < PAGE_SIZE:
