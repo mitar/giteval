@@ -14,10 +14,8 @@ ALL_IGNORE_FILENAMES = ()
 IGNORE_PULL_REQUESTS = ()
 IGNORE_AUTHORS = ()
 MERGE_AUTHORS = {}
-MAX_SCORE = 700
+MAX_SCORE = 1000
 SCORE_CORRECTIONS = ()
-WINNING_TEAM_SCORE = 70
-WINNING_TEAM = ()
 
 import local_settings
 
@@ -31,8 +29,6 @@ IGNORE_AUTHORS += getattr(local_settings, 'IGNORE_AUTHORS', ())
 MERGE_AUTHORS.update(getattr(local_settings, 'MERGE_AUTHORS', {}))
 MAX_SCORE = getattr(local_settings, 'MAX_SCORE', MAX_SCORE)
 SCORE_CORRECTIONS += getattr(local_settings, 'SCORE_CORRECTIONS', ())
-WINNING_TEAM_SCORE = getattr(local_settings, 'WINNING_TEAM_SCORE', WINNING_TEAM_SCORE)
-WINNING_TEAM += getattr(local_settings, 'WINNING_TEAM', ())
 
 if not GITHUB_ACCESS_TOKEN:
     raise Exception("GitHub access token is not configured.")
@@ -182,8 +178,6 @@ def print_stats(stats, level):
 
 def correct_scores(stats):
     stats = stats.copy()
-    for author in WINNING_TEAM:
-        stats[author] = stats.get(author, 0) + WINNING_TEAM_SCORE
     for author in SCORE_CORRECTIONS_DICT.keys():
         stats[author] = stats.get(author, 0)
     stats = {author: count + SCORE_CORRECTIONS_DICT.get(author, 0) for author, count in stats.items()}
