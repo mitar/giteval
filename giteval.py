@@ -42,7 +42,10 @@ SCORE_CORRECTIONS_DICT = {}
 for author, score in SCORE_CORRECTIONS:
     SCORE_CORRECTIONS_DICT[author] = SCORE_CORRECTIONS_DICT.get(author, 0) + score
 
-def github_api(url, args={}):
+def github_api(url, args=None):
+    if args is None:
+        args = {}
+
     data = []
 
     page = 1
